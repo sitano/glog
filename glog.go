@@ -43,6 +43,8 @@
 //		Logs are written to standard error instead of to files.
 //	-alsologtostderr=false
 //		Logs are written to standard error as well as to files.
+//	-showgoroutine=false
+//		Show Goroutine ID.
 //	-stderrthreshold=ERROR
 //		Log events at or above this severity are logged to standard
 //		error as well as to files.
@@ -398,6 +400,7 @@ func init() {
 	flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
 	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
+	flag.BoolVar(&logging.showGoroutine, "showgoroutine", false, "show goroutine id")
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
@@ -416,8 +419,9 @@ type loggingT struct {
 	// Boolean flags. Not handled atomically because the flag.Value interface
 	// does not let us avoid the =true, and that shorthand is necessary for
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	toStderr     bool // The -logtostderr flag.
-	alsoToStderr bool // The -alsologtostderr flag.
+	toStderr      bool // The -logtostderr flag.
+	alsoToStderr  bool // The -alsologtostderr flag.
+	showGoroutine bool // The -showgoroutine flag.
 
 	// Level flag. Handled atomically.
 	stderrThreshold severity // The -stderrthreshold flag.
@@ -511,6 +515,16 @@ func (l *loggingT) putBuffer(b *buffer) {
 
 var timeNow = time.Now // Stubbed out for testing.
 
+// steal from github.com/VividCortex/trace
+func goroutineNum() int {
+	b := make([]byte, 20)
+	runtime.Stack(b, false)
+	var goroutineNum int
+
+	fmt.Sscanf(string(b), "goroutine %d ", &goroutineNum)
+	return goroutineNum
+}
+
 /*
 header formats a log header as defined by the C++ implementation.
 It returns a buffer containing the formatted header.
@@ -522,7 +536,7 @@ where the fields are defined as follows:
 	mm               The month (zero padded; ie May is '05')
 	dd               The day (zero padded)
 	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
-	threadid         The space-padded thread ID as returned by GetTID()
+	goroutineid      Goroutine ID as show in panic()
 	file             The file name
 	line             The line number
 	msg              The user-supplied message
@@ -564,7 +578,11 @@ func (l *loggingT) header(s severity) *buffer {
 	buf.tmp[14] = '.'
 	buf.nDigits(6, 15, now.Nanosecond()/1000)
 	buf.tmp[21] = ' '
-	buf.nDigits(5, 22, pid) // TODO: should be TID
+	if l.showGoroutine {
+		buf.nDigits(5, 22, goroutineNum())
+	} else {
+		buf.nDigits(5, 22, 0)
+	}
 	buf.tmp[27] = ' '
 	buf.Write(buf.tmp[:28])
 	buf.WriteString(file)
