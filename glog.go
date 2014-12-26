@@ -696,7 +696,7 @@ func (l *loggingT) output(s severity, buf *buffer) {
 		}
 		// Write the stack trace for all goroutines to the files.
 		trace := stacks(true)
-		logExitFunc = func(error) {} // If we get a write error, we'll still exit below.
+		LogExitFunc = func(error) {} // If we get a write error, we'll still exit below.
 		for log := fatalLog; log >= infoLog; log-- {
 			if f := l.file[log]; f != nil { // Can be nil if -logtostderr is set.
 				f.Write(trace)
@@ -750,20 +750,20 @@ func stacks(all bool) []byte {
 	return trace
 }
 
-// logExitFunc provides a simple mechanism to override the default behavior
+// LogExitFunc provides a simple mechanism to override the default behavior
 // of exiting on error. Used in testing and to guarantee we reach a required exit
 // for fatal logs. Instead, exit could be a function rather than a method but that
 // would make its use clumsier.
-var logExitFunc func(error)
+var LogExitFunc func(error)
 
 // exit is called if there is trouble creating or writing log files.
 // It flushes the logs and exits the program; there's no point in hanging around.
 // l.mu is held.
 func (l *loggingT) exit(err error) {
 	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
-	// If logExitFunc is set, we do that instead of exiting.
-	if logExitFunc != nil {
-		logExitFunc(err)
+	// If LogExitFunc is set, we do that instead of exiting.
+	if LogExitFunc != nil {
+		LogExitFunc(err)
 		return
 	}
 	l.flushAll()
