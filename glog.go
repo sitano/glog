@@ -233,6 +233,11 @@ func (l *Level) Set(value string) error {
 	return nil
 }
 
+const (
+	LevelDebug = Level(1)
+	LevelTrace = Level(2)
+)
+
 // moduleSpec represents the setting of the -vmodule flag.
 type moduleSpec struct {
 	filter []modulePat
