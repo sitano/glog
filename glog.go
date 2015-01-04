@@ -236,6 +236,9 @@ func (l *Level) Set(value string) error {
 const (
 	LevelDebug = Level(1)
 	LevelTrace = Level(2)
+	LevelV     = Level(3)
+	LevelVV    = Level(4)
+	LevelVVV   = Level(5)
 )
 
 // moduleSpec represents the setting of the -vmodule flag.
