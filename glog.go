@@ -768,12 +768,12 @@ var LogExitFunc func(error)
 // It flushes the logs and exits the program; there's no point in hanging around.
 // l.mu is held.
 func (l *loggingT) exit(err error) {
-	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
 	// If LogExitFunc is set, we do that instead of exiting.
 	if LogExitFunc != nil {
 		LogExitFunc(err)
 		return
 	}
+	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
 	l.flushAll()
 	os.Exit(2)
 }
