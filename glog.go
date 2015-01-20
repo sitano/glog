@@ -683,18 +683,21 @@ func (l *loggingT) output(s severity, buf *buffer) {
 				l.exit(err)
 			}
 		}
-		switch s {
-		case fatalLog:
-			l.file[fatalLog].Write(data)
-			fallthrough
-		case errorLog:
-			l.file[errorLog].Write(data)
-			fallthrough
-		case warningLog:
-			l.file[warningLog].Write(data)
-			fallthrough
-		case infoLog:
-			l.file[infoLog].Write(data)
+		// try again
+		if l.file[s] != nil {
+			switch s {
+			case fatalLog:
+				l.file[fatalLog].Write(data)
+				fallthrough
+			case errorLog:
+				l.file[errorLog].Write(data)
+				fallthrough
+			case warningLog:
+				l.file[warningLog].Write(data)
+				fallthrough
+			case infoLog:
+				l.file[infoLog].Write(data)
+			}
 		}
 	}
 	if s == fatalLog {
@@ -771,7 +774,6 @@ func (l *loggingT) exit(err error) {
 	// If LogExitFunc is set, we do that instead of exiting.
 	if LogExitFunc != nil {
 		LogExitFunc(err)
-                l.mu.Unlock()
 		return
 	}
 	fmt.Fprintf(os.Stderr, "[%s] glog: exiting because of error: %s\n", time.Now(), err)
