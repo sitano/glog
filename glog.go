@@ -773,7 +773,7 @@ func (l *loggingT) exit(err error) {
 		LogExitFunc(err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
+	fmt.Fprintf(os.Stderr, "[%s] glog: exiting because of error: %s\n", time.Now(), err)
 	l.flushAll()
 	os.Exit(2)
 }
