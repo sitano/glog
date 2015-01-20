@@ -771,6 +771,7 @@ func (l *loggingT) exit(err error) {
 	// If LogExitFunc is set, we do that instead of exiting.
 	if LogExitFunc != nil {
 		LogExitFunc(err)
+                l.mu.Unlock()
 		return
 	}
 	fmt.Fprintf(os.Stderr, "[%s] glog: exiting because of error: %s\n", time.Now(), err)
