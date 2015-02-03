@@ -102,7 +102,7 @@ var onceLogDirs sync.Once
 // contains tag ("INFO", "FATAL", etc.) and t.  If the file is created
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
-func create(tag string, t time.Time) (f *os.File, filename string, err error) {
+func create(tag string, t time.Time, lrc bool) (f *os.File, filename string, err error) {
 	onceLogDirs.Do(createLogDirs)
 	if len(logDirs) == 0 {
 		return nil, "", errors.New("log: no log dirs")
@@ -110,15 +110,24 @@ func create(tag string, t time.Time) (f *os.File, filename string, err error) {
 	name, link := logName(tag, t)
 	var lastErr error
 	for _, dir := range logDirs {
-		fname := filepath.Join(dir, name)
-		f, err := os.Create(fname)
-		if err == nil {
-			symlink := filepath.Join(dir, link)
-			os.Remove(symlink)        // ignore err
-			os.Symlink(name, symlink) // ignore err
-			return f, fname, nil
+		if !lrc {
+			fname := filepath.Join(dir, name)
+			f, err := os.Create(fname)
+			if err == nil {
+				symlink := filepath.Join(dir, link)
+				os.Remove(symlink)        // ignore err
+				os.Symlink(name, symlink) // ignore err
+				return f, fname, nil
+			}
+			lastErr = err
+		} else {
+			fname := filepath.Join(dir, link)
+			f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
+			if err == nil {
+				return f, fname, nil
+			}
+			lastErr = err
 		}
-		lastErr = err
 	}
 	return nil, "", fmt.Errorf("log: cannot create log: %v", lastErr)
 }

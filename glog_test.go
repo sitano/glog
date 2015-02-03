@@ -39,7 +39,7 @@ func TestShortHostname(t *testing.T) {
 	}
 }
 
-// flushBuffer wraps a bytes.Buffer to satisfy flushSyncWriter.
+// flushBuffer wraps a bytes.Buffer to satisfy flushSyncRotateWriter.
 type flushBuffer struct {
 	bytes.Buffer
 }
@@ -52,8 +52,12 @@ func (f *flushBuffer) Sync() error {
 	return nil
 }
 
+func (f *flushBuffer) Rotate(time.Time) error {
+	return nil
+}
+
 // swap sets the log writers and returns the old array.
-func (l *loggingT) swap(writers [numSeverity]flushSyncWriter) (old [numSeverity]flushSyncWriter) {
+func (l *loggingT) swap(writers [numSeverity]flushSyncRotateWriter) (old [numSeverity]flushSyncRotateWriter) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	old = l.file
@@ -64,8 +68,8 @@ func (l *loggingT) swap(writers [numSeverity]flushSyncWriter) (old [numSeverity]
 }
 
 // newBuffers sets the log writers to all new byte buffers and returns the old array.
-func (l *loggingT) newBuffers() [numSeverity]flushSyncWriter {
-	return l.swap([numSeverity]flushSyncWriter{new(flushBuffer), new(flushBuffer), new(flushBuffer), new(flushBuffer)})
+func (l *loggingT) newBuffers() [numSeverity]flushSyncRotateWriter {
+	return l.swap([numSeverity]flushSyncRotateWriter{new(flushBuffer), new(flushBuffer), new(flushBuffer), new(flushBuffer)})
 }
 
 // contents returns the specified log value as a string.

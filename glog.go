@@ -395,9 +395,10 @@ func (t *traceLocation) Set(value string) error {
 }
 
 // flushSyncWriter is the interface satisfied by logging destinations.
-type flushSyncWriter interface {
+type flushSyncRotateWriter interface {
 	Flush() error
 	Sync() error
+	Rotate(time.Time) error
 	io.Writer
 }
 
@@ -409,6 +410,7 @@ func init() {
 	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 	flag.BoolVar(&logging.showGoroutine, "showgoroutine", false, "show goroutine id")
+	flag.BoolVar(&logging.logRotateCompatible, "logrotatecompatible", false, "logrotate compatible (simple file name, no symlink)")
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
@@ -427,9 +429,10 @@ type loggingT struct {
 	// Boolean flags. Not handled atomically because the flag.Value interface
 	// does not let us avoid the =true, and that shorthand is necessary for
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	toStderr      bool // The -logtostderr flag.
-	alsoToStderr  bool // The -alsologtostderr flag.
-	showGoroutine bool // The -showgoroutine flag.
+	toStderr            bool // The -logtostderr flag.
+	alsoToStderr        bool // The -alsologtostderr flag.
+	showGoroutine       bool // The -showgoroutine flag.
+	logRotateCompatible bool // The -logrotatecompatible flag.
 
 	// Level flag. Handled atomically.
 	stderrThreshold severity // The -stderrthreshold flag.
@@ -445,7 +448,7 @@ type loggingT struct {
 	// used to synchronize logging.
 	mu sync.Mutex
 	// file holds writer for each of the log types.
-	file [numSeverity]flushSyncWriter
+	file [numSeverity]flushSyncRotateWriter
 	// pcs is used in V to avoid an allocation when computing the caller's PC.
 	pcs [1]uintptr
 	// vmap is a cache of the V Level for each V() call site, identified by PC.
@@ -677,26 +680,35 @@ func (l *loggingT) output(s severity, buf *buffer) {
 		if l.alsoToStderr || s >= l.stderrThreshold.get() {
 			os.Stderr.Write(data)
 		}
-		if l.file[s] == nil {
-			if err := l.createFiles(s); err != nil {
+		var ws = s
+		if l.logRotateCompatible {
+			ws = infoLog
+		}
+		if l.file[ws] == nil {
+			if err := l.createFiles(ws); err != nil {
 				os.Stderr.Write(data) // Make sure the message appears somewhere.
 				l.exit(err)
 			}
 		}
-		// try again
-		if l.file[s] != nil {
-			switch s {
-			case fatalLog:
-				l.file[fatalLog].Write(data)
-				fallthrough
-			case errorLog:
-				l.file[errorLog].Write(data)
-				fallthrough
-			case warningLog:
-				l.file[warningLog].Write(data)
-				fallthrough
-			case infoLog:
-				l.file[infoLog].Write(data)
+		// try again, file creation may fail
+		if l.file[ws] != nil {
+			if l.logRotateCompatible {
+				l.file[ws].Write(data)
+			} else {
+
+				switch ws {
+				case fatalLog:
+					l.file[fatalLog].Write(data)
+					fallthrough
+				case errorLog:
+					l.file[errorLog].Write(data)
+					fallthrough
+				case warningLog:
+					l.file[warningLog].Write(data)
+					fallthrough
+				case infoLog:
+					l.file[infoLog].Write(data)
+				}
 			}
 		}
 	}
@@ -790,6 +802,7 @@ type syncBuffer struct {
 	*bufio.Writer
 	file   *os.File
 	sev    severity
+	lrc    bool
 	nbytes uint64 // The number of bytes written to this file
 }
 
@@ -799,7 +812,7 @@ func (sb *syncBuffer) Sync() error {
 
 func (sb *syncBuffer) Write(p []byte) (n int, err error) {
 	if sb.nbytes+uint64(len(p)) >= MaxSize {
-		if err := sb.rotateFile(time.Now()); err != nil {
+		if err := sb.Rotate(time.Now()); err != nil {
 			sb.logger.exit(err)
 		}
 	}
@@ -811,14 +824,14 @@ func (sb *syncBuffer) Write(p []byte) (n int, err error) {
 	return
 }
 
-// rotateFile closes the syncBuffer's file and starts a new one.
-func (sb *syncBuffer) rotateFile(now time.Time) error {
+// Rotate closes the syncBuffer's file and starts a new one.
+func (sb *syncBuffer) Rotate(now time.Time) error {
 	if sb.file != nil {
 		sb.Flush()
 		sb.file.Close()
 	}
 	var err error
-	sb.file, _, err = create(severityName[sb.sev], now)
+	sb.file, _, err = create(severityName[sb.sev], now, sb.lrc)
 	sb.nbytes = 0
 	if err != nil {
 		return err
@@ -852,8 +865,9 @@ func (l *loggingT) createFiles(sev severity) error {
 		sb := &syncBuffer{
 			logger: l,
 			sev:    s,
+			lrc:    l.logRotateCompatible,
 		}
-		if err := sb.rotateFile(now); err != nil {
+		if err := sb.Rotate(now); err != nil {
 			return err
 		}
 		l.file[s] = sb
@@ -888,6 +902,17 @@ func (l *loggingT) flushAll() {
 			file.Sync()  // ignore error
 		}
 	}
+}
+
+func (l *loggingT) rotate() {
+	l.mu.Lock()
+	now := time.Now()
+	for s := fatalLog; s >= infoLog; s-- {
+		if l.file[s] != nil {
+			l.file[s].Rotate(now)
+		}
+	}
+	l.mu.Unlock()
 }
 
 // setV computes and remembers the V level for a given PC
@@ -1060,4 +1085,8 @@ func Fatalln(args ...interface{}) {
 // Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
 func Fatalf(format string, args ...interface{}) {
 	logging.printf(fatalLog, format, args...)
+}
+
+func Rotate() {
+	logging.rotate()
 }
