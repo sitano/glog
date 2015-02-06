@@ -686,7 +686,6 @@ func (l *loggingT) output(s severity, buf *buffer) {
 		}
 		if l.file[ws] == nil {
 			if err := l.createFiles(ws); err != nil {
-				os.Stderr.Write(data) // Make sure the message appears somewhere.
 				l.exit(err)
 			}
 		}
