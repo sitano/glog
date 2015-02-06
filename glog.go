@@ -680,7 +680,7 @@ func (l *loggingT) output(s severity, buf *buffer) {
 		if l.alsoToStderr || s >= l.stderrThreshold.get() {
 			os.Stderr.Write(data)
 		}
-		var ws = s
+		ws := s
 		if l.logRotateCompatible {
 			ws = infoLog
 		}
@@ -695,7 +695,6 @@ func (l *loggingT) output(s severity, buf *buffer) {
 			if l.logRotateCompatible {
 				l.file[ws].Write(data)
 			} else {
-
 				switch ws {
 				case fatalLog:
 					l.file[fatalLog].Write(data)
@@ -1089,4 +1088,12 @@ func Fatalf(format string, args ...interface{}) {
 
 func Rotate() {
 	logging.rotate()
+}
+
+func Verbosity() Level {
+	return logging.verbosity.get()
+}
+
+func SetVerbosity(v Level) {
+	logging.verbosity.set(v)
 }
