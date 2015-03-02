@@ -19,6 +19,7 @@ package glog
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -85,6 +86,7 @@ func contains(s severity, str string, t *testing.T) bool {
 // setFlags configures the logging flags how the test expects them.
 func setFlags() {
 	logging.toStderr = false
+	*logDir = os.TempDir()
 }
 
 // Test that Info works as advertised.

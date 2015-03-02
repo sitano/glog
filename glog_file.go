@@ -26,26 +26,15 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
 // MaxSize is the maximum size of a log file in bytes.
 var MaxSize uint64 = 1024 * 1024 * 1800
 
-// logDirs lists the candidate directories for new log files.
-var logDirs []string
-
 // If non-empty, overrides the choice of directory in which to write logs.
 // See createLogDirs for the full list of possible destinations.
 var logDir = flag.String("log_dir", "", "If non-empty, write log files in this directory")
-
-func createLogDirs() {
-	if *logDir != "" {
-		logDirs = append(logDirs, *logDir)
-	}
-	logDirs = append(logDirs, os.TempDir())
-}
 
 var (
 	pid      = os.Getpid()
@@ -96,38 +85,33 @@ func logName(tag string, t time.Time) (name, link string) {
 	return name, program + "." + tag
 }
 
-var onceLogDirs sync.Once
-
 // create creates a new log file and returns the file and its filename, which
 // contains tag ("INFO", "FATAL", etc.) and t.  If the file is created
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
 func create(tag string, t time.Time, lrc bool) (f *os.File, filename string, err error) {
-	onceLogDirs.Do(createLogDirs)
-	if len(logDirs) == 0 {
-		return nil, "", errors.New("log: no log dirs")
+	if *logDir == "" {
+		return nil, "", errors.New("log: no log dir")
 	}
 	name, link := logName(tag, t)
 	var lastErr error
-	for _, dir := range logDirs {
-		if !lrc {
-			fname := filepath.Join(dir, name)
-			f, err := os.Create(fname)
-			if err == nil {
-				symlink := filepath.Join(dir, link)
-				os.Remove(symlink)        // ignore err
-				os.Symlink(name, symlink) // ignore err
-				return f, fname, nil
-			}
-			lastErr = err
-		} else {
-			fname := filepath.Join(dir, link)
-			f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-			if err == nil {
-				return f, fname, nil
-			}
-			lastErr = err
+	if !lrc {
+		fname := filepath.Join(*logDir, name)
+		f, err := os.Create(fname)
+		if err == nil {
+			symlink := filepath.Join(*logDir, link)
+			os.Remove(symlink)        // ignore err
+			os.Symlink(name, symlink) // ignore err
+			return f, fname, nil
 		}
+		lastErr = err
+	} else {
+		fname := filepath.Join(*logDir, link)
+		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
+		if err == nil {
+			return f, fname, nil
+		}
+		lastErr = err
 	}
 	return nil, "", fmt.Errorf("log: cannot create log: %v", lastErr)
 }
