@@ -415,6 +415,7 @@ func init() {
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 	flag.BoolVar(&logging.showGoroutine, "showgoroutine", false, "show goroutine id")
 	flag.BoolVar(&logging.logRotateCompatible, "logrotatecompatible", false, "logrotate compatible (simple file name, no symlink)")
+	flag.IntVar(&flushInterval, "flushinterval", int(30 * time.Second), "flush interval")
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
@@ -913,12 +914,20 @@ func (l *loggingT) createFiles(sev severity) error {
 	return nil
 }
 
-const flushInterval = 30 * time.Second
+var flushInterval = int(30 * time.Second)
 
 // flushDaemon periodically flushes the log file buffers.
 func (l *loggingT) flushDaemon() {
-	for _ = range time.NewTicker(flushInterval).C {
-		l.lockAndFlushAll()
+	for {
+		fi := flushInterval
+		tk := time.NewTicker(time.Duration(fi))
+		for _ = range tk.C {
+			l.lockAndFlushAll()
+			if fi != flushInterval {
+				tk.Stop()
+				break
+			}
+		}
 	}
 }
 
