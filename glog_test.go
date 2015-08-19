@@ -65,7 +65,7 @@ func (l *loggingT) swap(writers [numSeverity]flushSyncRotateWriter) (old [numSev
 	defer l.mu.Unlock()
 	old = l.file
 	for i, w := range writers {
-		logging.file[i] = w
+		Logging.file[i] = w
 	}
 	return
 }
@@ -77,7 +77,7 @@ func (l *loggingT) newBuffers() [numSeverity]flushSyncRotateWriter {
 
 // contents returns the specified log value as a string.
 func contents(s severity) string {
-	return logging.file[s].(*flushBuffer).String()
+	return Logging.file[s].(*flushBuffer).String()
 }
 
 // contains reports whether the string is contained in the log.
@@ -87,14 +87,13 @@ func contains(s severity, str string, t *testing.T) bool {
 
 // setFlags configures the logging flags how the test expects them.
 func setFlags() {
-	logging.toStderr = false
 	LogDir = os.TempDir()
 }
 
 // Test that Info works as advertised.
 func TestInfo(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	Info("test")
 	if !contains(infoLog, "I", t) {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
@@ -106,7 +105,7 @@ func TestInfo(t *testing.T) {
 
 func TestInfoDepth(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 
 	f := func() { InfoDepth(1, "depth-test1") }
 
@@ -165,7 +164,7 @@ func TestCopyStandardLogToPanic(t *testing.T) {
 // Test that using the standard log package logs to INFO.
 func TestStandardLog(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	stdLog.Print("test")
 	if !contains(infoLog, "I", t) {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
@@ -178,7 +177,7 @@ func TestStandardLog(t *testing.T) {
 // Test that the header has the correct format.
 func TestHeader(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	defer func(previous func() time.Time) { timeNow = previous }(timeNow)
 	timeNow = func() time.Time {
 		return time.Date(2006, 1, 2, 15, 4, 5, .067890e9, time.Local)
@@ -204,7 +203,7 @@ func TestHeader(t *testing.T) {
 // all be identical.
 func TestError(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	Error("test")
 	if !contains(errorLog, "E", t) {
 		t.Errorf("Error has wrong character: %q", contents(errorLog))
@@ -226,7 +225,7 @@ func TestError(t *testing.T) {
 // all be identical.
 func TestWarning(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	Warning("test")
 	if !contains(warningLog, "W", t) {
 		t.Errorf("Warning has wrong character: %q", contents(warningLog))
@@ -243,9 +242,9 @@ func TestWarning(t *testing.T) {
 // Test that a V log goes to Info.
 func TestV(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.verbosity.Set("2")
-	defer logging.verbosity.Set("0")
+	defer Logging.swap(Logging.newBuffers())
+	Logging.Verbosity.Set("2")
+	defer Logging.Verbosity.Set("0")
 	V(2).Info("test")
 	if !contains(infoLog, "I", t) {
 		t.Errorf("Info has wrong character: %q", contents(infoLog))
@@ -258,9 +257,9 @@ func TestV(t *testing.T) {
 // Test that a vmodule enables a log in this file.
 func TestVmoduleOn(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.vmodule.Set("glog_test=2")
-	defer logging.vmodule.Set("")
+	defer Logging.swap(Logging.newBuffers())
+	Logging.Vmodule.Set("glog_test=2")
+	defer Logging.Vmodule.Set("")
 	if !V(1) {
 		t.Error("V not enabled for 1")
 	}
@@ -282,9 +281,9 @@ func TestVmoduleOn(t *testing.T) {
 // Test that a vmodule of another file does not enable a log in this file.
 func TestVmoduleOff(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.vmodule.Set("notthisfile=2")
-	defer logging.vmodule.Set("")
+	defer Logging.swap(Logging.newBuffers())
+	Logging.Vmodule.Set("notthisfile=2")
+	defer Logging.Vmodule.Set("")
 	for i := 1; i <= 3; i++ {
 		if V(Level(i)) {
 			t.Errorf("V enabled for %d", i)
@@ -317,9 +316,9 @@ var vGlobs = map[string]bool{
 // Test that vmodule globbing works as advertised.
 func testVmoduleGlob(pat string, match bool, t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
-	defer logging.vmodule.Set("")
-	logging.vmodule.Set(pat)
+	defer Logging.swap(Logging.newBuffers())
+	defer Logging.Vmodule.Set("")
+	Logging.Vmodule.Set(pat)
 	if V(2) != Verbose(match) {
 		t.Errorf("incorrect match for %q: got %t expected %t", pat, V(2), match)
 	}
@@ -343,7 +342,7 @@ func TestRollover(t *testing.T) {
 	MaxSize = 512
 
 	Info("x") // Be sure we have a file.
-	info, ok := logging.file[infoLog].(*syncBuffer)
+	info, ok := Logging.file[infoLog].(*syncBuffer)
 	if !ok {
 		t.Fatal("info wasn't created")
 	}
@@ -379,7 +378,7 @@ func TestRollover(t *testing.T) {
 
 func TestLogBacktraceAt(t *testing.T) {
 	setFlags()
-	defer logging.swap(logging.newBuffers())
+	defer Logging.swap(Logging.newBuffers())
 	// The peculiar style of this code simplifies line counting and maintenance of the
 	// tracing block below.
 	var infoLine string
@@ -389,7 +388,7 @@ func TestLogBacktraceAt(t *testing.T) {
 		}
 		_, file = filepath.Split(file)
 		infoLine = fmt.Sprintf("%s:%d", file, line+delta)
-		err := logging.traceLocation.Set(infoLine)
+		err := Logging.TraceLocation.Set(infoLine)
 		if err != nil {
 			t.Fatal("error setting log_backtrace_at: ", err)
 		}
@@ -415,7 +414,7 @@ func TestLogBacktraceAt(t *testing.T) {
 
 func BenchmarkHeader(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		buf, _, _ := logging.header(infoLog, 0)
-		logging.putBuffer(buf)
+		buf, _, _ := Logging.header(infoLog, 0)
+		Logging.putBuffer(buf)
 	}
 }
