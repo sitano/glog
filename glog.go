@@ -39,13 +39,11 @@
 // This package provides several flags that modify this behavior.
 // As a result, flag.Parse must be called before any logging is done.
 //
-//	-logtostderr=false
-//		Logs are written to standard error instead of to files.
-//	-alsologtostderr=false
+//	-alsologtostd=false
 //		Logs are written to standard error as well as to files.
 //	-showgoroutine=false
 //		Show Goroutine ID.
-//	-stderrthreshold=ERROR
+//	-stdthreshold=ERROR
 //		Log events at or above this severity are logged to standard
 //		error as well as to files.
 //	-log_dir=""
