@@ -149,7 +149,7 @@ func (s *severity) Set(value string) error {
 		}
 		threshold = severity(v)
 	}
-	Logging.StderrThreshold.set(threshold)
+	Logging.StdThreshold.set(threshold)
 	return nil
 }
 
@@ -407,9 +407,9 @@ type flushSyncRotateWriter interface {
 }
 
 func init() {
-	flag.BoolVar(&Logging.AlsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
+	flag.BoolVar(&Logging.AlsoLogToStd, "alsologtostd", false, "log to standard (error) output as well as files")
 	flag.Var(&Logging.Verbosity, "v", "log level for V logs")
-	flag.Var(&Logging.StderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
+	flag.Var(&Logging.StdThreshold, "stdthreshold", "logs at or above this threshold go to stdout/err")
 	flag.Var(&Logging.Vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	flag.Var(&Logging.TraceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 	flag.BoolVar(&Logging.ShowGoroutine, "showgoroutine", false, "show goroutine id")
@@ -417,9 +417,8 @@ func init() {
 	flag.DurationVar(&Logging.FlushInterval, "flushinterval", time.Duration(30) * time.Second, "flush interval")
 
 	// Default stderrThreshold is ERROR.
-	Logging.StderrThreshold = errorLog
+	Logging.StdThreshold = errorLog
 
-	Logging.FlushInterval = time.Duration(30) * time.Second
 	Logging.setVState(0, nil, false)
 	go Logging.flushDaemon()
 }
@@ -434,12 +433,12 @@ type loggingT struct {
 	// Boolean flags. Not handled atomically because the flag.Value interface
 	// does not let us avoid the =true, and that shorthand is necessary for
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	AlsoToStderr        bool // The -alsologtostderr flag.
+	AlsoLogToStd        bool // The -alsologtostd flag.
 	ShowGoroutine       bool // The -showgoroutine flag.
 	LogRotateCompatible bool // The -logrotatecompatible flag.
 
 	// Level flag. Handled atomically.
-	StderrThreshold severity // The -stderrthreshold flag.
+	StdThreshold severity // The -stdthreshold flag.
 
 	// Auto flush goroutine interval
 	FlushInterval time.Duration
@@ -704,7 +703,7 @@ func (l *loggingT) logToStd() bool {
 }
 
 // output writes the data to the log files and releases the buffer.
-func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoToStderr bool) {
+func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoToStd bool) {
 	l.mu.Lock()
 	if l.TraceLocation.isSet() {
 		if l.TraceLocation.match(file, line) {
@@ -712,19 +711,19 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 		}
 	}
 	data := buf.Bytes()
-	if !flag.Parsed() {
-		os.Stderr.Write([]byte("ERROR: logging before flag.Parse: "))
-		os.Stderr.Write(data)
-	} else if l.logToStd() {
-		os.Stderr.Write(data)
-	} else {
-		if alsoToStderr || l.AlsoToStderr || s >= l.StderrThreshold.get() {
+	ws := s
+	if l.LogRotateCompatible {
+		ws = infoLog
+	}
+	logToStd := l.logToStd()
+	if logToStd || alsoToStd || l.AlsoLogToStd || s >= l.StdThreshold.get()  {
+		if ws == infoLog {
+			os.Stdout.Write(data)
+		} else {
 			os.Stderr.Write(data)
 		}
-		ws := s
-		if l.LogRotateCompatible {
-			ws = infoLog
-		}
+	}
+	if !logToStd {
 		if l.file[ws] == nil {
 			if err := l.createFiles(ws); err != nil {
 				l.exit(err)
