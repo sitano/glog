@@ -68,9 +68,9 @@ func shortHostname(hostname string) string {
 	return hostname
 }
 
-// logName returns a new log file name containing tag, with start time t, and
+// LogName returns a new log file name containing tag, with start time t, and
 // the name for the symlink for tag.
-func logName(tag string, t time.Time) (name, link string) {
+var LogName = func (tag string, t time.Time) (name, link string) {
 	name = fmt.Sprintf("%s.%s.%s.log.%s.%04d%02d%02d-%02d%02d%02d.%d",
 		program,
 		host,
@@ -93,7 +93,7 @@ func logName(tag string, t time.Time) (name, link string) {
 func create(tag string, t time.Time, lrc bool) (f *os.File, filename string, err error) {
 	var lastErr error
 	if len(LogDir) > 0 {
-		name, link := logName(tag, t)
+		name, link := LogName(tag, t)
 		if !lrc {
 			fname := filepath.Join(LogDir, name)
 			f, err := os.Create(fname)
