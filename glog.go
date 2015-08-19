@@ -415,11 +415,12 @@ func init() {
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 	flag.BoolVar(&logging.showGoroutine, "showgoroutine", false, "show goroutine id")
 	flag.BoolVar(&logging.logRotateCompatible, "logrotatecompatible", false, "logrotate compatible (simple file name, no symlink)")
-	flag.IntVar(&flushInterval, "flushinterval", int(30 * time.Second), "flush interval")
+	flag.DurationVar(&logging.flushInterval, "flushinterval", time.Duration(30) * time.Second, "flush interval")
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = errorLog
 
+	logging.flushInterval = time.Duration(30) * time.Second
 	logging.setVState(0, nil, false)
 	go logging.flushDaemon()
 }
@@ -441,6 +442,9 @@ type loggingT struct {
 
 	// Level flag. Handled atomically.
 	stderrThreshold severity // The -stderrthreshold flag.
+
+	// Auto flush goroutine interval
+	flushInterval time.Duration
 
 	// freeList is a list of byte buffers, maintained under freeListMu.
 	freeList *buffer
@@ -917,16 +921,14 @@ func (l *loggingT) createFiles(sev severity) error {
 	return nil
 }
 
-var flushInterval = int(30 * time.Second)
-
 // flushDaemon periodically flushes the log file buffers.
 func (l *loggingT) flushDaemon() {
 	for {
-		fi := flushInterval
-		tk := time.NewTicker(time.Duration(fi))
+		fi := l.flushInterval
+		tk := time.NewTicker(fi)
 		for _ = range tk.C {
 			l.lockAndFlushAll()
-			if fi != flushInterval {
+			if fi != l.flushInterval {
 				tk.Stop()
 				break
 			}
