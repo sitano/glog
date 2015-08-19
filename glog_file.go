@@ -33,7 +33,7 @@ var MaxSize uint64 = 1024 * 1024 * 1800
 
 // If non-empty, overrides the choice of directory in which to write logs.
 // See createLogDirs for the full list of possible destinations.
-var logDir = flag.String("log_dir", ".", "If non-empty, write log files in this directory")
+var LogDir string
 
 var (
 	pid      = os.Getpid()
@@ -55,6 +55,8 @@ func init() {
 
 	// Sanitize userName since it may contain filepath separators on Windows.
 	userName = strings.Replace(userName, `\`, "_", -1)
+
+	flag.StringVar(&LogDir, "log_dir", "", "If non-empty, write log files in this directory")
 }
 
 // shortHostname returns its argument, truncating at the first period.
@@ -89,25 +91,30 @@ func logName(tag string, t time.Time) (name, link string) {
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
 func create(tag string, t time.Time, lrc bool) (f *os.File, filename string, err error) {
-	name, link := logName(tag, t)
 	var lastErr error
-	if !lrc {
-		fname := filepath.Join(*logDir, name)
-		f, err := os.Create(fname)
-		if err == nil {
-			symlink := filepath.Join(*logDir, link)
-			os.Remove(symlink)        // ignore err
-			os.Symlink(name, symlink) // ignore err
-			return f, fname, nil
+	if len(LogDir) > 0 {
+		name, link := logName(tag, t)
+		if !lrc {
+			fname := filepath.Join(LogDir, name)
+			f, err := os.Create(fname)
+			if err == nil {
+				symlink := filepath.Join(LogDir, link)
+				os.Remove(symlink)        // ignore err
+				os.Symlink(name, symlink) // ignore err
+				return f, fname, nil
+			}
+			lastErr = err
+		} else {
+			fname := filepath.Join(LogDir, link)
+			f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
+			if err == nil {
+				return f, fname, nil
+			}
+			lastErr = err
 		}
-		lastErr = err
 	} else {
-		fname := filepath.Join(*logDir, link)
-		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0660)
-		if err == nil {
-			return f, fname, nil
-		}
-		lastErr = err
+		// in the future better dup2 stdout/err and return fd
+		lastErr = fmt.Errorf("no -log_dir")
 	}
 	return nil, "", fmt.Errorf("log: cannot create log: %v", lastErr)
 }
