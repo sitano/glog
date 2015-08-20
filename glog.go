@@ -418,12 +418,17 @@ func init() {
 	Logging.StdThreshold = ErrorLog
 
 	Logging.setVState(0, nil, false)
+	Logging.flushC = make(chan time.Time, 1)
 	go Logging.flushDaemon()
 }
 
 // Flush flushes all pending log I/O.
 func Flush() {
 	Logging.lockAndFlushAll()
+}
+
+func RestartFlusher() {
+	Logging.flushC <- time.Now()
 }
 
 // loggingT collects all the global state of the logging setup.
@@ -440,6 +445,7 @@ type loggingT struct {
 
 	// Auto flush goroutine interval
 	FlushInterval time.Duration
+	flushC chan time.Time
 
 	// freeList is a list of byte buffers, maintained under freeListMu.
 	freeList *buffer
@@ -922,15 +928,18 @@ func (l *loggingT) createFiles(sev Severity) error {
 
 // flushDaemon periodically flushes the log file buffers.
 func (l *loggingT) flushDaemon() {
+	fi := l.FlushInterval
+	tk := time.NewTicker(fi)
 	for {
-		fi := l.FlushInterval
-		tk := time.NewTicker(fi)
-		for _ = range tk.C {
-			l.lockAndFlushAll()
-			if fi != l.FlushInterval {
-				tk.Stop()
-				break
-			}
+		select {
+		case <-l.flushC:
+		case <-tk.C:
+		}
+		l.lockAndFlushAll()
+		if fi != l.FlushInterval {
+			tk.Stop()
+			fi = l.FlushInterval
+			tk = time.NewTicker(fi)
 		}
 	}
 }

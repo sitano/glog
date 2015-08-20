@@ -48,3 +48,4 @@ The list of enhancements include:
 - os.Stdout support along os.Stderr
 - flush interval have nice time.Duration arg type
 - "log" package output support (write adapter)
+- restart flusher to update flushInterval earlier
